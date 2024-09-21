@@ -1,0 +1,116 @@
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Dense, BatchNormalization, Dropout
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam, SGD, RMSprop
+from tensorflow.keras.losses import binary_crossentropy, mean_squared_error
+from tensorflow.keras.datasets import fashion_mnist
+import numpy as np
+import matplotlib.pyplot as plt
+
+# MNIST
+(X_train, _), (X_test, _) = fashion_mnist.load_data()
+X_train = X_train.astype('float32') / 255.
+X_test = X_test.astype('float32') / 255.
+X_train = X_train.reshape((len(X_train), np.prod(X_train.shape[1:])))
+X_test = X_test.reshape((len(X_test), np.prod(X_test.shape[1:])))
+
+# setting
+optimizers = {
+    'Adam': Adam,
+    'SGD': SGD,
+    'RMSprop': RMSprop
+}
+
+cost_functions = {
+    'binary_crossentropy': binary_crossentropy,
+    'mean_squared_error': mean_squared_error
+}
+
+activation_functions = ['leaky_relu', 'tanh', 'sigmoid']
+
+results = []
+
+for opt_name, optimizer in optimizers.items():
+    for lr in [0.001, 0.01, 0.1]:
+        for activation in activation_functions:
+            for loss_name, cost_function in cost_functions.items():
+                print(f"\nTraining with {opt_name} optimizer, learning rate {lr}, activation {activation}, and cost function {loss_name}")
+
+                input_img = Input(shape=(784,))
+
+                # Encoder
+                encoded = Dense(450, activation=activation)(input_img)
+                encoded = BatchNormalization()(encoded)
+                encoded = Dropout(0.2)(encoded)
+                encoded = Dense(64, activation=activation)(encoded)
+                encoded = BatchNormalization()(encoded)
+                encoded = Dropout(0.2)(encoded)
+                encoded = Dense(32, activation=activation)(encoded)
+
+                # Decoder
+                decoded = Dense(64, activation=activation)(encoded)
+                decoded = BatchNormalization()(decoded)
+                decoded = Dropout(0.2)(decoded)
+                decoded = Dense(450, activation=activation)(decoded)
+                decoded = BatchNormalization()(decoded)
+                decoded = Dropout(0.2)(decoded)
+                decoded = Dense(784, activation='sigmoid')(decoded)
+
+                # ساخت مدل Autoencoder
+                autoencoder = Model(input_img, decoded)
+
+                opt = optimizer(learning_rate=lr)
+                autoencoder.compile(optimizer=opt, loss=cost_function, metrics=['accuracy'])
+
+                history = autoencoder.fit(X_train, X_train, epochs=3, batch_size=256, shuffle=True, validation_data=(X_test, X_test))
+
+                scores = autoencoder.evaluate(X_test, X_test, verbose=0)
+                results.append((opt_name, lr, activation, loss_name, scores[0], scores[1]))
+                print(f"Test loss: {scores[0]:.4f}, Test accuracy: {scores[1] * 100:.2f}%")
+
+# پیدا کردن بهترین ترکیب
+best_result = min(results, key=lambda x: x[4])  # کمترین loss
+print(f"\nBest optimizer: {best_result[0]} with learning rate: {best_result[1]}, activation: {best_result[2]}, cost function: {best_result[3]}")
+print(f"Test loss: {best_result[4]:.4f}, Test accuracy: {best_result[5] * 100:.2f}%")
+
+# آموزش نهایی مدل با بهترین ترکیب
+best_opt = optimizers[best_result[0]](learning_rate=best_result[1])
+final_autoencoder = Model(input_img, decoded)
+final_autoencoder.compile(optimizer=best_opt, loss=cost_functions[best_result[3]], metrics=['accuracy'])
+final_history = final_autoencoder.fit(X_train, X_train, epochs=50, batch_size=256, shuffle=True, validation_data=(X_test, X_test))
+
+# ترسیم نمودار دقت و خطا
+plt.plot(final_history.history['accuracy'], label='Train Accuracy')
+plt.plot(final_history.history['val_accuracy'], label='Validation Accuracy')
+plt.title('Model Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.show()
+
+plt.plot(final_history.history['loss'], label='Train Loss')
+plt.plot(final_history.history['val_loss'], label='Validation Loss')
+plt.title('Model Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+
+# نمایش نتایج
+decoded_imgs = final_autoencoder.predict(X_test)
+
+n = 10
+plt.figure(figsize=(20, 4))
+for i in range(n):
+    ax = plt.subplot(2, n, i + 1)
+    plt.imshow(X_test[i].reshape(28, 28))
+    plt.gray()
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+    ax = plt.subplot(2, n, i + 1 + n)
+    plt.imshow(decoded_imgs[i].reshape(28, 28))
+    plt.gray()
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+plt.show()
