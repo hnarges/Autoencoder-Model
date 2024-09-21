@@ -1,7 +1,11 @@
 **Autoencoder Implementation and Experimentation**
+
+
 This repository contains the implementation of an Autoencoder model, experimenting with different configurations to optimize its performance in reconstructing data. The project involves testing various activation functions, optimizers, and loss functions, as well as applying regularization techniques.
 
 **Table of Contents**
+
+
 Overview
 Model Implementation
 Experimentation and Results
@@ -10,6 +14,8 @@ Analysis
 Classifier Using Bottleneck Features
 Conclusions
 **Overview**
+
+
 The purpose of this project is to implement an Autoencoder network and improve its reconstruction performance by:
 
 Testing different activation functions, optimizers, and loss functions.
