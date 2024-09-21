@@ -1,0 +1,81 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.layers import Input, Dense, Dropout, LeakyReLU, BatchNormalization
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+import random
+
+# بارگذاری داده‌های MNIST
+(X_train, y_train), (X_test, y_test) = mnist.load_data()
+X_train = X_train.astype('float32') / 255.
+X_test = X_test.astype('float32') / 255.
+X_train = X_train.reshape((len(X_train), np.prod(X_train.shape[1:])))
+X_test = X_test.reshape((len(X_test), np.prod(X_test.shape[1:])))
+
+# ساخت مدل Autoencoder
+input_img = Input(shape=(784,))
+
+# Encoder
+encoded = Dense(450)(input_img)
+encoded = LeakyReLU(alpha=0.1)(encoded)
+encoded = BatchNormalization()(encoded)
+encoded = Dropout(0.2)(encoded)
+encoded = Dense(64)(encoded)
+encoded = LeakyReLU(alpha=0.1)(encoded)
+encoded = BatchNormalization()(encoded)
+encoded = Dropout(0.2)(encoded)
+encoded = Dense(32)(encoded)
+bottleneck = LeakyReLU(alpha=0.1)(encoded)
+
+# Decoder
+decoded = Dense(64)(bottleneck)
+decoded = LeakyReLU(alpha=0.1)(decoded)
+decoded = BatchNormalization()(decoded)
+decoded = Dropout(0.2)(decoded)
+decoded = Dense(450)(decoded)
+decoded = LeakyReLU(alpha=0.1)(decoded)
+decoded = BatchNormalization()(decoded)
+decoded = Dropout(0.2)(decoded)
+decoded = Dense(784, activation='sigmoid')(decoded)
+
+# ساخت و آموزش مدل Autoencoder
+autoencoder = Model(input_img, decoded)
+autoencoder.compile(optimizer=Adam(learning_rate=0.01), loss='mean_squared_error', metrics=['accuracy'])
+autoencoder.fit(X_train, X_train, epochs=50, batch_size=256, shuffle=True, validation_data=(X_test, X_test))
+
+# ساخت مدل Encoder و Decoder
+encoder = Model(input_img, bottleneck)
+encoded_input = Input(shape=(32,))
+decoder_layer = autoencoder.layers[-7](encoded_input)
+for layer in autoencoder.layers[-6:]:
+    decoder_layer = layer(decoder_layer)
+decoder = Model(encoded_input, decoder_layer)
+
+# انتخاب نمونه‌های تصادفی از هر کلاس
+classes = np.unique(y_test)
+fig, axs = plt.subplots(len(classes), 3, figsize=(10, 20))
+
+for i, cls in enumerate(classes):
+    idx = random.choice(np.where(y_test == cls)[0])
+    original_img = X_test[idx].reshape(28, 28)
+    encoded_img = encoder.predict(X_test[idx].reshape(1, 784))
+    decoded_img = decoder.predict(encoded_img).reshape(28, 28)
+
+    # نمایش تصاویر
+    axs[i, 0].imshow(original_img, cmap='gray')
+    axs[i, 0].set_title(f'Original Class: {cls}')
+    axs[i, 0].axis('off')
+
+    axs[i, 1].imshow(encoded_img.reshape(4, 8), cmap='gray')
+    axs[i, 1].set_title(f'Encoded (Bottleneck) Class: {cls}')
+    axs[i, 1].axis('off')
+
+    axs[i, 2].imshow(decoded_img, cmap='gray')
+    axs[i, 2].set_title(f'Decoded Class: {cls}')
+    axs[i, 2].axis('off')
+
+plt.tight_layout()
+plt.show()
+
